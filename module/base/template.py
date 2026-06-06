@@ -52,6 +52,15 @@ class Template(Resource):
                         # Follow the first frame
                         image = image[:, :, 0].copy()
 
+                    # imageio always decodes GIF as RGB, but some templates (e.g.
+                    # TEMPLATE_STAGE_CLEAR_20240725) are grayscale and matched against
+                    # grayscale images. Collapse pseudo-grayscale frames (R==G==B) to 2D
+                    # so cv2.matchTemplate won't fail on a channel mismatch.
+                    if image.ndim == 3 and image.shape[2] == 3 \
+                            and np.array_equal(image[:, :, 0], image[:, :, 1]) \
+                            and np.array_equal(image[:, :, 1], image[:, :, 2]):
+                        image = image[:, :, 0].copy()
+
                     image = self.pre_process(image)
                     self._image += [image, cv2.flip(image, 1)]
             else:
@@ -65,7 +74,7 @@ class Template(Resource):
             if self.is_gif:
                 self._image_binary = []
                 for image in self.image:
-                    image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+                    image_gray = image if image.ndim == 2 else cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
                     _, image_binary = cv2.threshold(image_gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
                     self._image_binary.append(image_binary)
             else:
@@ -80,8 +89,8 @@ class Template(Resource):
             if self.is_gif:
                 self._image_luma = []
                 for image in self.image:
-                    luma = rgb2luma(image)
-                    self.image_luma.append(luma)
+                    luma = image if image.ndim == 2 else rgb2luma(image)
+                    self._image_luma.append(luma)
             else:
                 self._image_luma = rgb2luma(self.image)
 
